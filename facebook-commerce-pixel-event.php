@@ -973,16 +973,16 @@ JS;
 			$event = sprintf(
 				"/* %s Facebook Integration Event Tracking */\n" .
 				"fbq('set', 'agent', %s, '%s');\n" .
-				"window.wcFacebookPixelFiredEvents = window.wcFacebookPixelFiredEvents || {};\n" .
-				"if (!window.wcFacebookPixelFiredEvents[%s]) {\n" .
-				"window.wcFacebookPixelFiredEvents[%s] = true;\n" .
-				"fbq('%s', '%s', %s, %s);\n" .
-				'}',
+				"(function(){var c=window.__wc_fb_page_generated&&(Math.floor(Date.now()/1000)-window.__wc_fb_page_generated)>%d;\n" .
+				"if(c){fbq('%s','%s',%s);}else{fbq('%s','%s',%s,%s);}\n" .
+				"})()",
 				WC_Facebookcommerce_Utils::get_integration_name(),
 				$agent_js,
 				esc_js( $pixel_id ),
-				wp_json_encode( $event_id ),
-				wp_json_encode( $event_id ),
+				$cache_threshold,
+				esc_js( $method ),
+				esc_js( $event_name ),
+				$encoded_params,
 				esc_js( $method ),
 				esc_js( $event_name ),
 				$encoded_params,
