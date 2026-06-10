@@ -297,7 +297,8 @@ class WC_Facebookcommerce_Pixel {
 		 */
 	private function get_pixel_init_code() {
 
-		$agent_string = Event::get_platform_identifier();
+		$agent_base      = Event::get_platform_identifier();
+		$cache_threshold = 1800;
 
 		/**
 		 * Filters Facebook Pixel init code.
@@ -307,10 +308,11 @@ class WC_Facebookcommerce_Pixel {
 		return apply_filters(
 			'facebook_woocommerce_pixel_init',
 			sprintf(
-				"fbq('init', '%s', %s, %s);\n",
+				"fbq('init', '%s', %s, {agent:(function(){var a='%s';if(window.__wc_fb_page_generated&&(Math.floor(Date.now()/1000)-window.__wc_fb_page_generated)>%d){a=a.replace(/(\\d+\\.\\d+\\.\\d+)/,'$1_c');}return a;})()});\n",
 				esc_js( self::get_pixel_id() ),
 				wp_json_encode( $this->user_info, JSON_PRETTY_PRINT | JSON_FORCE_OBJECT ),
-				wp_json_encode( array( 'agent' => $agent_string ), JSON_PRETTY_PRINT | JSON_FORCE_OBJECT )
+				esc_js( $agent_base ),
+				$cache_threshold
 			)
 		);
 	}
@@ -340,6 +342,7 @@ class WC_Facebookcommerce_Pixel {
 
 		?>
 			<script <?php echo self::get_script_attributes(); ?>>
+				window.__wc_fb_page_generated = <?php echo (int) time(); ?>;
 				!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 					n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 					n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
@@ -955,39 +958,48 @@ JS;
 		// Reuse shared param preparation logic.
 		[ 'params' => $event_params, 'event_id' => $event_id ] = self::prepare_event_params( $params, $event_name );
 
+		$agent_base      = Event::get_platform_identifier();
+		$pixel_id        = self::get_pixel_id();
+		$encoded_params  = wp_json_encode( $event_params, JSON_PRETTY_PRINT | JSON_FORCE_OBJECT );
+		$cache_threshold = 1800;
+
+		$agent_js = sprintf(
+			"(function(){var a='%s';if(window.__wc_fb_page_generated&&(Math.floor(Date.now()/1000)-window.__wc_fb_page_generated)>%d){a=a.replace(/(\\d+\\.\\d+\\.\\d+)/,'$1_c');}return a;})()",
+			esc_js( $agent_base ),
+			$cache_threshold
+		);
+
 		if ( ! empty( $event_id ) ) {
 			$event = sprintf(
 				"/* %s Facebook Integration Event Tracking */\n" .
-				"fbq('set', 'agent', '%s', '%s');\n" .
+				"fbq('set', 'agent', %s, '%s');\n" .
 				"window.wcFacebookPixelFiredEvents = window.wcFacebookPixelFiredEvents || {};\n" .
 				"if (!window.wcFacebookPixelFiredEvents[%s]) {\n" .
 				"window.wcFacebookPixelFiredEvents[%s] = true;\n" .
 				"fbq('%s', '%s', %s, %s);\n" .
 				'}',
 				WC_Facebookcommerce_Utils::get_integration_name(),
-				Event::get_platform_identifier(),
-				self::get_pixel_id(),
+				$agent_js,
+				esc_js( $pixel_id ),
 				wp_json_encode( $event_id ),
 				wp_json_encode( $event_id ),
 				esc_js( $method ),
 				esc_js( $event_name ),
-				wp_json_encode( $event_params, JSON_PRETTY_PRINT | JSON_FORCE_OBJECT ),
+				$encoded_params,
 				wp_json_encode( array( 'eventID' => $event_id ), JSON_PRETTY_PRINT | JSON_FORCE_OBJECT )
 			);
-
 		} else {
-
-				$event = sprintf(
-					"/* %s Facebook Integration Event Tracking */\n" .
-					"fbq('set', 'agent', '%s', '%s');\n" .
-					"fbq('%s', '%s', %s);",
-					WC_Facebookcommerce_Utils::get_integration_name(),
-					Event::get_platform_identifier(),
-					self::get_pixel_id(),
-					esc_js( $method ),
-					esc_js( $event_name ),
-					wp_json_encode( $event_params, JSON_PRETTY_PRINT | JSON_FORCE_OBJECT )
-				);
+			$event = sprintf(
+				"/* %s Facebook Integration Event Tracking */\n" .
+				"fbq('set', 'agent', %s, '%s');\n" .
+				"fbq('%s', '%s', %s);",
+				WC_Facebookcommerce_Utils::get_integration_name(),
+				$agent_js,
+				esc_js( $pixel_id ),
+				esc_js( $method ),
+				esc_js( $event_name ),
+				$encoded_params
+			);
 		}
 
 		return $event;
